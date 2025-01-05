@@ -1,40 +1,14 @@
+require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
 const cors = require('cors')
+const Person = require('./models/person')
 
 const app = express()
 
+app.use(express.static('dist'))
 app.use(express.json())
 app.use(cors())
-app.use(express.static('dist'))
-
-let persons = [
-  {
-    "id": 1,
-    "name": "Arto Hellas",
-    "number": "040-123456"
-  },
-  {
-    "id": 2,
-    "name": "Ada Lovelace",
-    "number": "39-44-5323523"
-  },
-  {
-    "id": 3,
-    "name": "Dan Abramov",
-    "number": "12-43-234345"
-  },
-  {
-    "id": 4,
-    "name": "Mary Poppendieck",
-    "number": "39-23-6423122"
-  }
-]
-
-const generateId = () => {
-  const maxId = persons.length > 0 ? Math.max(...persons.map(n => n.id)) : 0
-  return maxId + 1
-}
 
 const logRequestBody = (tokens, request, response) => {
   return [
@@ -49,6 +23,20 @@ const logRequestBody = (tokens, request, response) => {
 }
 app.use(morgan(logRequestBody))
 
+const unkonwnEndpoint = (request, response) => {
+  response.status(404).send({error:"unknown endpoint"})
+}
+app.use(unkonwnEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+  if(error.name === 'CastError'){
+    return response.status(400).send({error:'malformatted id'})
+  }
+  next(error)
+}
+app.use(errorHandler)
+
 app.get('/info', (request, response) => {
   const time = new Date()
   response.send(`
@@ -58,41 +46,35 @@ app.get('/info', (request, response) => {
 })
 
 app.get('/api/persons', (request, response) => {
-  response.json(persons)
+  Person.find({}).then(persons => {
+    response.json(persons)
+  })
 })
 
-app.get('/api/persons/:id', (request, response) => {
-  const id = Number(request.params.id)
-
-  // code in the material:
-  const person = persons.find(e=>e.id === id)
-  if(person){
-    response.json(person)
-  } else {
-    response.status(404).end()
-  }
-
-  // my code:
-  // This has some bugs when a deletion happens, it will return 200 which is wrong.
-  // if(id > persons.length){
-  //   response.status(404).end()
-  // } else {
-  //   response.json(persons.find(e=>e.id === id))
-  // }
-  
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id)
+    .then(person => {
+      if(person){
+        response.json(person)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
 })
 
 app.delete('/api/persons/:id', (request, response) => {
-  const id = +request.params.id
-  persons = persons.filter(e => e.id !== id)
-  response.status(204).end()
+  Person.findByIdAndDelete(request.params.id)
+    .then(result => {
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
 app.post('/api/persons', (request, response) => {
   // request.body === the item sent from the frontend.
   const body = request.body
-  // console.log(body.name);
-  
+
   // First check if the name is empty:
   if(!body.name){
     return response.status(400).json({
@@ -103,18 +85,18 @@ app.post('/api/persons', (request, response) => {
       error:'number missing'
     })
   }
-  if(persons.find(e=>e.name === body.name)){
-    return response.status(400).json({
-      error:'name must be unique'
-    })
-  }
-  const person = {
-    "id": generateId(),
-    "name": body.name,
-    "number": body.number || ''
-  }
-  persons = persons.concat(person)
-  response.json(person)
+  // if(Person.find({name:body.name})){
+  //   return response.status(400).json({
+  //     error:'name must be unique'
+  //   })
+  // }
+  const person = new Person({
+    name: body.name,
+    number: body.number
+  })
+  person.save().then(savePerson => {
+    response.json(savePerson)
+  })
 })
 
 const PORT = process.env.PORT || 3001
