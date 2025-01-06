@@ -24,6 +24,13 @@ const personSchema = new mongoose.Schema({
   number: {
     type: String,
     required: true,
+    validate: {
+      validator: function(v) {
+        const pattern = /^\d{2,3}-\d{5,}$/
+        return pattern.test(v)
+      },
+      message: props => `${props.value} is not a valid number.`
+    }
   },
 })
 personSchema.set('toJSON', {

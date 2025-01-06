@@ -83,7 +83,7 @@ app.post('/api/persons', (request, response) => {
   const body = request.body
 
   // First check if the name is empty:
-  if(body.name === undefined){
+  if(!body.name){
     return response.status(400).json({
       error:'name missing'
     })
@@ -104,6 +104,11 @@ app.post('/api/persons', (request, response) => {
   person.save().then(savePerson => {
     response.json(savePerson)
   })
+  .catch(error => {
+    if(error.name === 'ValidationError') {
+      return response.status(400).json({error:error.message})
+    }
+  })
 })
 
 app.put('/api/persons/:id', (request, response, next) => {
@@ -120,7 +125,12 @@ app.put('/api/persons/:id', (request, response, next) => {
     .then(updatedPerson => {
       response.json(updatedPerson)
     })
-    .catch(error => next(error))
+    .catch(error => {
+      if(error.name === 'ValidationError'){
+        return response.status(400).json({error:error.message})
+      }
+      next(error)
+    })
 })
 
 const PORT = process.env.PORT || 3001
